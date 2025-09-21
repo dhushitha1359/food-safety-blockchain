@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FoodChain Safety & Traceability</title>
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #eef6ff;
+            font-family: sans-serif;
+            color: #0b2545;
+            text-align: center;
+        }
+
+        .card {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 950px;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 32px;
+        }
+
+        input,
+        button {
+            padding: 10px;
+            margin: 5px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        button.ghost {
+            background: #f1f5f9;
+            color: #0b2545;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 15px;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        th {
+            background: #f1f5f9;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>FoodChain Safety & Traceability</h1>
+        <p id="account">Not connected</p>
+        <button id="connectBtn">Connect Wallet</button>
+
+        <h3>Add Food Item (Owner only)</h3>
+        <input id="name" type="text" placeholder="Food Name" />
+        <input id="origin" type="text" placeholder="Origin" />
+        <input id="pdate" type="date" placeholder="Processing Date" />
+        <input id="edate" type="date" placeholder="Expiry Date" />
+        <button id="addBtn">Add Food Item</button>
+
+        <h3>Update Status (Owner only)</h3>
+        <input id="itemId" type="number" placeholder="Item ID" />
+        <input id="status" type="text" placeholder="New Status" />
+        <button id="updateBtn">Update Status</button>
+
+        <h3>Traceability Records</h3>
+        <button id="loadBtn" class="ghost">Load All Items</button>
+        <div id="itemsArea"></div>
+    </div>
+
+    <!-- Ethers.js -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // ✅ Your Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyBlxepcOBMOa9s1J7ColomMgujk03uxMnI",
+            authDomain: "food-bbb8f.firebaseapp.com",
+            projectId: "food-bbb8f",
+            storageBucket: "food-bbb8f.firebasestorage.app",
+            messagingSenderId: "613863427177",
+            appId: "1:613863427177:web:2b51a7cca65ba5c0faa6f8"
+        };
+
+        // Initialize Firebase + Firestore
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // ✅ Blockchain Contract Setup
+        const CONTRACT_ADDRESS = "0x4F458CCb88d1AdbdC412A5bb6988a10920C2BC57"; // replace if redeployed
+        const CONTRACT_ABI = [
+            {
+                "inputs": [
+                    {
+                        "internalType": "string",
+                        "name": "_name",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "_origin",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "_processingDate",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "_expiryDate",
+                        "type": "string"
+                    }
+                ],
+                "name": "addFoodItem",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "stateMutability": "nonpayable",
+                "type": "constructor"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "uint256",
+                        "name": "id",
+                        "type": "uint256"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "string",
+                        "name": "name",
+                        "type": "string"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "string",
+                        "name": "origin",
+                        "type": "string"
+                    }
+                ],
+                "name": "FoodItemAdded",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "uint256",
+                        "name": "id",
+                        "type": "uint256"
+                    },
+                    {
+                        "indexed": false,
+                        "internalType": "string",
+                        "name": "status",
+                        "type": "string"
+                    }
+                ],
+                "name": "FoodItemStatusUpdated",
+                "type": "event"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "_id",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "_status",
+                        "type": "string"
+                    }
+                ],
+                "name": "updateStatus",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "foodItemCount",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "foodItems",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "id",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "name",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "origin",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "processingDate",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "expiryDate",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "currentStatus",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "timestamp",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "getAllFoodItems",
+                "outputs": [
+                    {
+                        "internalType": "uint256[]",
+                        "name": "ids",
+                        "type": "uint256[]"
+                    },
+                    {
+                        "internalType": "string[]",
+                        "name": "names",
+                        "type": "string[]"
+                    },
+                    {
+                        "internalType": "string[]",
+                        "name": "origins",
+                        "type": "string[]"
+                    },
+                    {
+                        "internalType": "string[]",
+                        "name": "processingDates",
+                        "type": "string[]"
+                    },
+                    {
+                        "internalType": "string[]",
+                        "name": "expiryDates",
+                        "type": "string[]"
+                    },
+                    {
+                        "internalType": "string[]",
+                        "name": "statuses",
+                        "type": "string[]"
+                    },
+                    {
+                        "internalType": "uint256[]",
+                        "name": "timestamps",
+                        "type": "uint256[]"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "owner",
+                "outputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ];
+
+        let provider, signer, contract;
+
+        async function connectWallet() {
+            if (!window.ethereum) return alert("Install MetaMask");
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            await provider.send("eth_requestAccounts", []);
+            signer = provider.getSigner();
+            contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+            const addr = await signer.getAddress();
+            document.getElementById("account").innerText = "Connected: " + addr;
+        }
+
+        async function addFoodItem() {
+            const n = document.getElementById("name").value;
+            const o = document.getElementById("origin").value;
+            const p = document.getElementById("pdate").value;
+            const e = document.getElementById("edate").value;
+            if (!n || !o || !p || !e) return alert("Fill all fields");
+
+            const tx = await contract.addFoodItem(n, o, p, e);
+            await tx.wait();
+
+            // ✅ Save in Firebase
+            await addDoc(collection(db, "foodItems"), {
+                name: n,
+                origin: o,
+                processingDate: p,
+                expiryDate: e,
+                status: "Created",
+                timestamp: new Date().toISOString()
+            });
+
+            alert("Food Item Added (Blockchain + Firebase)");
+        }
+
+        async function updateStatus() {
+            const id = document.getElementById("itemId").value;
+            const st = document.getElementById("status").value;
+            if (!id || !st) return alert("Fill fields");
+
+            const tx = await contract.updateStatus(id, st);
+            await tx.wait();
+
+            // ✅ Save update in Firebase
+            await addDoc(collection(db, "statusUpdates"), {
+                itemId: id,
+                newStatus: st,
+                timestamp: new Date().toISOString()
+            });
+
+            alert("Status Updated (Blockchain + Firebase)");
+        }
+
+        async function loadItems() {
+            const res = await contract.getAllFoodItems();
+            const ids = res[0], names = res[1], origins = res[2], pdates = res[3], edates = res[4], statuses = res[5], times = res[6];
+            if (ids.length === 0) { document.getElementById("itemsArea").innerHTML = "<p>No items yet.</p>"; return; }
+            let html = "<table><tr><th>ID</th><th>Name</th><th>Origin</th><th>Processed</th><th>Expiry</th><th>Status</th><th>Added</th></tr>";
+            for (let i = 0; i < ids.length; i++) {
+                html += `<tr>
+          <td>${ids[i]}</td>
+          <td>${names[i]}</td>
+          <td>${origins[i]}</td>
+          <td>${pdates[i]}</td>
+          <td>${edates[i]}</td>
+          <td>${statuses[i]}</td>
+          <td>${new Date(times[i] * 1000).toLocaleString()}</td>
+        </tr>`;
+            }
+            html += "</table>";
+            document.getElementById("itemsArea").innerHTML = html;
+        }
+
+        document.getElementById("connectBtn").onclick = connectWallet;
+        document.getElementById("addBtn").onclick = addFoodItem;
+        document.getElementById("updateBtn").onclick = updateStatus;
+        document.getElementById("loadBtn").onclick = loadItems;
+    </script>
+</body>
+
+</html>
